@@ -1,0 +1,164 @@
+/*
+ * Toggle_Line_Comment.bsh
+ *
+ * For jEdit 5.5
+ *
+ * Toggle line comments for the current line or selected lines.
+ *
+ * It first uses the current jEdit mode's "lineComment" property.
+ * If that property is missing, it tries to determine a comment string
+ * from the file extension.
+ *
+ * Sentaurus defaults:
+ *   .scm  -> ;
+ *   .cmd  -> #
+ *   .des  -> #
+ *   .par  -> #
+ *   .tdr  -> #
+ *
+ * No external plugin is required.
+ */
+
+import org.gjt.sp.jedit.*;
+import org.gjt.sp.jedit.textarea.*;
+import java.util.regex.*;
+
+Buffer buffer = textArea.getBuffer();
+
+String lineComment = buffer.getProperty("lineComment");
+
+String path = buffer.getPath();
+String lowerPath = path.toLowerCase();
+
+if (lineComment == null || lineComment.trim().length() == 0)
+{
+    if (lowerPath.endsWith(".scm"))
+    {
+        lineComment = ";";
+    }
+    else if (lowerPath.endsWith(".cmd") ||
+             lowerPath.endsWith(".des") ||
+             lowerPath.endsWith(".par") ||
+             lowerPath.endsWith(".tdr"))
+    {
+        lineComment = "#";
+    }
+    else
+    {
+        lineComment = "#";
+    }
+}
+
+/*
+ * Determine the first and last line to process.
+ */
+int startLine;
+int endLine;
+
+Selection[] selections = textArea.getSelection();
+
+if (selections.length > 0)
+{
+    startLine = selections[0].getStartLine();
+    endLine = selections[selections.length - 1].getEndLine();
+}
+else
+{
+    startLine = textArea.getCaretLine();
+    endLine = startLine;
+}
+
+/*
+ * Determine whether the selected lines are already commented.
+ *
+ * We ignore completely blank lines.
+ * A comment marker is considered present after leading whitespace.
+ */
+boolean allCommented = true;
+boolean foundNonBlank = false;
+
+for (int line = startLine; line <= endLine; line++)
+{
+    String text = buffer.getLineText(line);
+
+    String trimmed = text.trim();
+
+    if (trimmed.length() == 0)
+        continue;
+
+    foundNonBlank = true;
+
+    String leading = text.substring(0, text.length() - text.replaceFirst("^\\s*", "").length());
+
+    if (!text.substring(leading.length()).startsWith(lineComment))
+    {
+        allCommented = false;
+        break;
+    }
+}
+
+if (!foundNonBlank)
+    allCommented = false;
+
+
+/*
+ * Modify all selected lines as one undo operation.
+ */
+buffer.beginCompoundEdit();
+
+try
+{
+    for (int line = endLine; line >= startLine; line--)
+    {
+        String text = buffer.getLineText(line);
+
+        String trimmed = text.trim();
+
+        if (trimmed.length() == 0)
+            continue;
+
+        int leadingLength = text.length()
+            - text.replaceFirst("^\\s*", "").length();
+
+        String leading = text.substring(0, leadingLength);
+        String content = text.substring(leadingLength);
+
+        if (allCommented)
+        {
+            /*
+             * Remove the comment marker.
+             * Also remove one optional space after it.
+             */
+            if (content.startsWith(lineComment))
+            {
+                content = content.substring(lineComment.length());
+
+                if (content.startsWith(" "))
+                    content = content.substring(1);
+                else if (content.startsWith("\t"))
+                    content = content.substring(1);
+
+                String newText = leading + content;
+
+                int offset = buffer.getLineStartOffset(line);
+                buffer.remove(offset, text.length());
+                buffer.insert(offset, newText);
+            }
+        }
+        else
+        {
+            /*
+             * Add the comment marker after indentation.
+             */
+            String newText = leading + lineComment + " " + content;
+
+            int offset = buffer.getLineStartOffset(line);
+            buffer.remove(offset, text.length());
+            buffer.insert(offset, newText);
+        }
+    }
+}
+finally
+{
+    buffer.endCompoundEdit();
+}

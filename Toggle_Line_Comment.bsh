@@ -13,7 +13,7 @@
  *   .scm  -> ;
  *   .cmd  -> #
  *   .des  -> #
- *   .par  -> #
+ *   .par  -> *    (sdevice.par comments use '*', '#' is only for #include)
  *   .tdr  -> #
  *
  * No external plugin is required.
@@ -36,9 +36,12 @@ if (lineComment == null || lineComment.trim().length() == 0)
     {
         lineComment = ";";
     }
+    else if (lowerPath.endsWith(".par"))
+    {
+        lineComment = "*";
+    }
     else if (lowerPath.endsWith(".cmd") ||
              lowerPath.endsWith(".des") ||
-             lowerPath.endsWith(".par") ||
              lowerPath.endsWith(".tdr"))
     {
         lineComment = "#";
@@ -47,6 +50,17 @@ if (lineComment == null || lineComment.trim().length() == 0)
     {
         lineComment = "#";
     }
+}
+
+/*
+ * Force '*' for Sentaurus .par files even if the jEdit mode property
+ * reports something else. In sdevice.par the '*' marker is the fixed
+ * comment syntax; lines starting with '#' are #include directives and
+ * must never be treated as comments.
+ */
+if (lowerPath.endsWith(".par"))
+{
+    lineComment = "*";
 }
 
 /*
